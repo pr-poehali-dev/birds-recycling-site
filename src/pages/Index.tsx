@@ -1,54 +1,69 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 
-/* ─── Моковые данные рейтинга ─── */
-const mockRating = [
-  { id: 1, name: "Анна Петрова", phone: "+7 *** ***-**-01", kg: 127, avatar: "🌿" },
-  { id: 2, name: "Иван Сидоров", phone: "+7 *** ***-**-02", kg: 98, avatar: "🍃" },
-  { id: 3, name: "Мария Козлова", phone: "+7 *** ***-**-03", kg: 84, avatar: "🌱" },
-  { id: 4, name: "Сергей Новиков", phone: "+7 *** ***-**-04", kg: 73, avatar: "🌲" },
-  { id: 5, name: "Елена Морозова", phone: "+7 *** ***-**-05", kg: 61, avatar: "🌾" },
-  { id: 6, name: "Дмитрий Волков", phone: "+7 *** ***-**-06", kg: 54, avatar: "🪴" },
-  { id: 7, name: "Ольга Соколова", phone: "+7 *** ***-**-07", kg: 43, avatar: "🍀" },
-  { id: 8, name: "Алексей Лебедев", phone: "+7 *** ***-**-08", kg: 37, avatar: "🌻" },
-];
+/* ─── Типы ─── */
+type Section = "home" | "about" | "rating" | "contacts";
+type AuthMode = "login" | "register" | "admin";
 
-const mockHalf = [
-  { id: 1, name: "Мария Козлова", phone: "+7 *** ***-**-03", kg: 412, avatar: "🌱" },
-  { id: 2, name: "Анна Петрова", phone: "+7 *** ***-**-01", kg: 387, avatar: "🌿" },
-  { id: 3, name: "Иван Сидоров", phone: "+7 *** ***-**-02", kg: 320, avatar: "🍃" },
-  { id: 4, name: "Елена Морозова", phone: "+7 *** ***-**-05", kg: 285, avatar: "🌾" },
-  { id: 5, name: "Сергей Новиков", phone: "+7 *** ***-**-04", kg: 241, avatar: "🌲" },
-];
+interface RawEntry {
+  id: number;
+  userName: string;
+  userPhone: string;
+  type: string;
+  kg: number;
+  status: "pending" | "confirmed" | "rejected";
+  date: string;
+}
 
-const mockYear = [
-  { id: 1, name: "Иван Сидоров", phone: "+7 *** ***-**-02", kg: 892, avatar: "🍃" },
-  { id: 2, name: "Анна Петрова", phone: "+7 *** ***-**-01", kg: 754, avatar: "🌿" },
-  { id: 3, name: "Дмитрий Волков", phone: "+7 *** ***-**-06", kg: 623, avatar: "🪴" },
-  { id: 4, name: "Мария Козлова", phone: "+7 *** ***-**-03", kg: 598, avatar: "🌱" },
-  { id: 5, name: "Ольга Соколова", phone: "+7 *** ***-**-07", kg: 471, avatar: "🍀" },
-];
+interface UserAccount {
+  name: string;
+  phone: string;
+  password: string;
+  totalKg: number;
+  avatar: string;
+  isAdmin?: boolean;
+}
 
+const AVATARS = ["🌿", "🍃", "🌱", "🌲", "🌾", "🪴", "🍀", "🌻", "🦋", "🌸"];
 const rawTypes = ["Бумага", "Пластик", "Стекло", "Металл", "Картон", "Текстиль", "Электроника"];
 
-type Section = "home" | "about" | "rating" | "contacts";
-type AuthMode = "login" | "register";
+/* ─── Начальные данные ─── */
+const initialUsers: UserAccount[] = [
+  { name: "Анна Петрова", phone: "+79001234501", password: "pass1", totalKg: 127, avatar: "🌿" },
+  { name: "Иван Сидоров", phone: "+79001234502", password: "pass2", totalKg: 98, avatar: "🍃" },
+  { name: "Мария Козлова", phone: "+79001234503", password: "pass3", totalKg: 84, avatar: "🌱" },
+  { name: "Сергей Новиков", phone: "+79001234504", password: "pass4", totalKg: 73, avatar: "🌲" },
+  { name: "Елена Морозова", phone: "+79001234505", password: "pass5", totalKg: 61, avatar: "🌾" },
+  { name: "admin", phone: "admin", password: "1111", totalKg: 0, avatar: "⚙️", isAdmin: true },
+];
 
+const initialEntries: RawEntry[] = [
+  { id: 1, userName: "Анна Петрова", userPhone: "+79001234501", type: "Бумага", kg: 12, status: "pending", date: "23.04.2026" },
+  { id: 2, userName: "Иван Сидоров", userPhone: "+79001234502", type: "Пластик", kg: 8, status: "pending", date: "22.04.2026" },
+  { id: 3, userName: "Мария Козлова", userPhone: "+79001234503", type: "Стекло", kg: 5, status: "confirmed", date: "21.04.2026" },
+  { id: 4, userName: "Сергей Новиков", userPhone: "+79001234504", type: "Металл", kg: 15, status: "pending", date: "20.04.2026" },
+];
+
+/* ─── Утилиты ─── */
 function getRankClass(i: number) {
   if (i === 0) return "rank-1";
   if (i === 1) return "rank-2";
   if (i === 2) return "rank-3";
   return "rank-other";
 }
-
 function getRankEmoji(i: number) {
   if (i === 0) return "🥇";
   if (i === 1) return "🥈";
   if (i === 2) return "🥉";
   return `${i + 1}`;
 }
+function maskPhone(phone: string) {
+  if (phone.length < 6) return phone;
+  return phone.slice(0, 4) + " *** ***-**-" + phone.slice(-2);
+}
 
-function RatingRow({ item, index }: { item: typeof mockRating[0]; index: number }) {
+/* ─── Компонент строки рейтинга ─── */
+function RatingRow({ item, index }: { item: UserAccount; index: number }) {
   return (
     <div className={`flex items-center gap-4 p-4 rounded-xl mb-3 transition-all hover:scale-[1.01] ${index < 3 ? "card-eco" : "bg-white/60 border border-green-100"}`}>
       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${getRankClass(index)}`}>
@@ -57,33 +72,45 @@ function RatingRow({ item, index }: { item: typeof mockRating[0]; index: number 
       <div className="text-2xl">{item.avatar}</div>
       <div className="flex-1">
         <div className="font-semibold text-gray-800">{item.name}</div>
-        <div className="text-sm text-gray-500">{item.phone}</div>
+        <div className="text-sm text-gray-500">{maskPhone(item.phone)}</div>
       </div>
       <div className="text-right">
-        <div className="font-bold text-green-700 text-lg">{item.kg} кг</div>
+        <div className="font-bold text-green-700 text-lg">{item.totalKg} кг</div>
         <div className="text-xs text-gray-400">сдано</div>
       </div>
     </div>
   );
 }
 
+/* ─── ГЛАВНЫЙ КОМПОНЕНТ ─── */
 export default function Index() {
   const [section, setSection] = useState<Section>("home");
   const [ratingTab, setRatingTab] = useState<"month" | "half" | "year">("month");
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState<{ name: string; phone: string } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authError, setAuthError] = useState("");
 
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
+  /* Аккаунты */
+  const [users, setUsers] = useState<UserAccount[]>(initialUsers);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
+  /* Заявки */
+  const [entries, setEntries] = useState<RawEntry[]>(initialEntries);
+
+  /* Форма авторизации */
+  const [fPhone, setFPhone] = useState("");
+  const [fName, setFName] = useState("");
+  const [fPassword, setFPassword] = useState("");
+
+  /* Форма сдачи */
   const [rawType, setRawType] = useState(rawTypes[0]);
   const [rawKg, setRawKg] = useState("");
   const [addSuccess, setAddSuccess] = useState(false);
+
+  const isLoggedIn = currentUser !== null;
+  const isAdmin = currentUser?.isAdmin === true;
 
   const navItems: { id: Section; label: string }[] = [
     { id: "home", label: "Главная" },
@@ -92,18 +119,91 @@ export default function Index() {
     { id: "contacts", label: "Контакты" },
   ];
 
+  /* ─── Авторизация ─── */
   function handleAuth(e: React.FormEvent) {
     e.preventDefault();
-    setIsLoggedIn(true);
-    setUser({ name: authMode === "register" ? name : "Участник", phone });
-    setShowAuth(false);
-    setPhone("");
-    setName("");
-    setPassword("");
+    setAuthError("");
+
+    if (authMode === "admin") {
+      if (fPhone.trim() === "admin" && fPassword === "1111") {
+        const adminUser = users.find(u => u.isAdmin);
+        if (adminUser) {
+          setCurrentUser(adminUser);
+          setShowAuth(false);
+          resetAuthForm();
+        }
+      } else {
+        setAuthError("Неверный логин или пароль администратора");
+      }
+      return;
+    }
+
+    if (authMode === "login") {
+      const found = users.find(u =>
+        (u.phone === fPhone.trim() || u.name.toLowerCase() === fPhone.trim().toLowerCase()) &&
+        u.password === fPassword && !u.isAdmin
+      );
+      if (found) {
+        setCurrentUser(found);
+        setShowAuth(false);
+        resetAuthForm();
+      } else {
+        setAuthError("Неверный номер телефона или пароль");
+      }
+      return;
+    }
+
+    if (authMode === "register") {
+      if (!fName.trim() || !fPhone.trim() || !fPassword.trim()) {
+        setAuthError("Заполните все поля");
+        return;
+      }
+      const exists = users.find(u => u.phone === fPhone.trim());
+      if (exists) {
+        setAuthError("Пользователь с таким телефоном уже зарегистрирован");
+        return;
+      }
+      const newUser: UserAccount = {
+        name: fName.trim(),
+        phone: fPhone.trim(),
+        password: fPassword,
+        totalKg: 0,
+        avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
+      };
+      setUsers(prev => [...prev, newUser]);
+      setCurrentUser(newUser);
+      setShowAuth(false);
+      resetAuthForm();
+    }
   }
 
+  function resetAuthForm() {
+    setFPhone("");
+    setFName("");
+    setFPassword("");
+    setAuthError("");
+  }
+
+  /* ─── Подача заявки на сдачу ─── */
   function handleAddRaw(e: React.FormEvent) {
     e.preventDefault();
+    if (!currentUser) return;
+    const kg = parseFloat(rawKg);
+    if (isNaN(kg) || kg <= 0) return;
+
+    const now = new Date();
+    const dateStr = `${now.getDate().toString().padStart(2, "0")}.${(now.getMonth() + 1).toString().padStart(2, "0")}.${now.getFullYear()}`;
+
+    const newEntry: RawEntry = {
+      id: Date.now(),
+      userName: currentUser.name,
+      userPhone: currentUser.phone,
+      type: rawType,
+      kg,
+      status: "pending",
+      date: dateStr,
+    };
+    setEntries(prev => [newEntry, ...prev]);
     setAddSuccess(true);
     setTimeout(() => {
       setAddSuccess(false);
@@ -112,10 +212,28 @@ export default function Index() {
     }, 2000);
   }
 
-  const currentRating = ratingTab === "month" ? mockRating : ratingTab === "half" ? mockHalf : mockYear;
+  /* ─── Подтверждение/отклонение заявки (админ) ─── */
+  function handleConfirm(entryId: number) {
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry) return;
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: "confirmed" } : e));
+    setUsers(prev => prev.map(u => u.phone === entry.userPhone ? { ...u, totalKg: u.totalKg + entry.kg } : u));
+  }
+
+  function handleReject(entryId: number) {
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: "rejected" } : e));
+  }
+
+  /* Рейтинг — только зарегистрированные (не admin), отсортированные */
+  const ratingUsers = users
+    .filter(u => !u.isAdmin && u.totalKg > 0)
+    .sort((a, b) => b.totalKg - a.totalKg);
+
+  const pendingCount = entries.filter(e => e.status === "pending").length;
 
   return (
     <div className="min-h-screen bg-nature-texture">
+
       {/* ─── НАВИГАЦИЯ ─── */}
       <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-green-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -140,30 +258,58 @@ export default function Index() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {isLoggedIn ? (
+              <>
+                {isAdmin ? (
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <div className="flex items-center gap-2 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200">
+                        <span className="text-amber-700 text-sm font-bold">⚙️ Администратор</span>
+                        {pendingCount > 0 && (
+                          <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
+                        )}
+                        <button onClick={() => setCurrentUser(null)} className="text-gray-400 hover:text-red-500 transition-colors ml-1">
+                          <Icon name="LogOut" size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowAddForm(true)}
+                      className="btn-primary px-4 py-2 text-sm hidden md:flex items-center gap-2"
+                    >
+                      <Icon name="Plus" size={16} />
+                      Сдать вторсырьё
+                    </button>
+                    <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-full border border-green-200">
+                      <span className="text-lg">{currentUser?.avatar}</span>
+                      <span className="text-green-700 text-sm font-medium">{currentUser?.name}</span>
+                      <button onClick={() => setCurrentUser(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+                        <Icon name="LogOut" size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setShowAddForm(true)}
-                  className="btn-primary px-4 py-2 text-sm hidden md:flex items-center gap-2"
+                  onClick={() => { setShowAuth(true); setAuthMode("login"); setAuthError(""); }}
+                  className="btn-primary px-5 py-2 text-sm"
                 >
-                  <Icon name="Plus" size={16} />
-                  Сдать вторсырьё
+                  Войти
                 </button>
-                <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-full border border-green-200">
-                  <span className="text-green-700 text-sm font-medium">{user?.name}</span>
-                  <button onClick={() => { setIsLoggedIn(false); setUser(null); }} className="text-gray-400 hover:text-red-500 transition-colors">
-                    <Icon name="LogOut" size={14} />
-                  </button>
-                </div>
+                <button
+                  onClick={() => { setShowAuth(true); setAuthMode("admin"); setAuthError(""); }}
+                  className="btn-secondary px-4 py-2 text-sm hidden md:block"
+                  title="Вход для администратора"
+                >
+                  ⚙️ Админ
+                </button>
               </div>
-            ) : (
-              <button
-                onClick={() => { setShowAuth(true); setAuthMode("login"); }}
-                className="btn-primary px-5 py-2 text-sm"
-              >
-                Войти
-              </button>
             )}
             <button className="md:hidden p-2 text-gray-600" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               <Icon name={mobileMenuOpen ? "X" : "Menu"} size={22} />
@@ -182,7 +328,15 @@ export default function Index() {
                 {item.label}
               </button>
             ))}
-            {isLoggedIn && (
+            {!isLoggedIn && (
+              <button
+                onClick={() => { setShowAuth(true); setAuthMode("admin"); setMobileMenuOpen(false); setAuthError(""); }}
+                className="btn-secondary w-full py-2 text-sm mt-1"
+              >
+                ⚙️ Вход для администратора
+              </button>
+            )}
+            {isLoggedIn && !isAdmin && (
               <button
                 onClick={() => { setShowAddForm(true); setMobileMenuOpen(false); }}
                 className="btn-primary w-full py-2 text-sm mt-2 flex items-center justify-center gap-2"
@@ -195,8 +349,94 @@ export default function Index() {
         )}
       </nav>
 
+      {/* ─── ПАНЕЛЬ АДМИНИСТРАТОРА ─── */}
+      {isAdmin && (
+        <div className="max-w-5xl mx-auto px-4 py-10">
+          <div className="mb-8 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center text-3xl">⚙️</div>
+            <div>
+              <h2 className="text-2xl font-black text-gray-800">Панель администратора</h2>
+              <p className="text-gray-500 text-sm">Управление заявками на сдачу вторсырья</p>
+            </div>
+            {pendingCount > 0 && (
+              <div className="ml-auto bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl font-semibold text-sm">
+                ⚠️ {pendingCount} заявок ожидают подтверждения
+              </div>
+            )}
+          </div>
+
+          {/* Статистика */}
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            {[
+              { val: entries.filter(e => e.status === "pending").length, label: "Ожидают", color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
+              { val: entries.filter(e => e.status === "confirmed").length, label: "Подтверждено", color: "text-green-600", bg: "bg-green-50 border-green-200" },
+              { val: entries.filter(e => e.status === "rejected").length, label: "Отклонено", color: "text-red-500", bg: "bg-red-50 border-red-200" },
+            ].map((s, i) => (
+              <div key={i} className={`card-eco p-5 text-center border ${s.bg}`}>
+                <div className={`text-3xl font-black ${s.color}`}>{s.val}</div>
+                <div className="text-sm text-gray-500">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Список заявок */}
+          <div className="space-y-3">
+            {entries.length === 0 && (
+              <div className="text-center py-16 text-gray-400">Нет заявок</div>
+            )}
+            {entries.map((entry) => (
+              <div key={entry.id} className={`card-eco p-5 flex flex-col md:flex-row md:items-center gap-4 ${entry.status === "confirmed" ? "border-green-200 bg-green-50/30" : entry.status === "rejected" ? "border-red-100 bg-red-50/20 opacity-60" : ""}`}>
+                <div className="flex items-center gap-4 flex-1">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${entry.status === "confirmed" ? "bg-green-100" : entry.status === "rejected" ? "bg-red-100" : "bg-amber-100"}`}>
+                    {entry.status === "confirmed" ? "✅" : entry.status === "rejected" ? "❌" : "⏳"}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-800">{entry.userName}</div>
+                    <div className="text-xs text-gray-400">{maskPhone(entry.userPhone)} · {entry.date}</div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto md:ml-0">
+                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">{entry.type}</span>
+                    <span className="font-black text-gray-800 text-lg">{entry.kg} кг</span>
+                  </div>
+                </div>
+                {entry.status === "pending" && (
+                  <div className="flex gap-2 md:flex-shrink-0">
+                    <button
+                      onClick={() => handleConfirm(entry.id)}
+                      className="btn-primary px-5 py-2 text-sm flex items-center gap-2"
+                    >
+                      <Icon name="Check" size={16} />
+                      Подтвердить
+                    </button>
+                    <button
+                      onClick={() => handleReject(entry.id)}
+                      className="px-5 py-2 text-sm rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-all font-semibold flex items-center gap-2"
+                    >
+                      <Icon name="X" size={16} />
+                      Отклонить
+                    </button>
+                  </div>
+                )}
+                {entry.status === "confirmed" && (
+                  <div className="text-green-600 text-sm font-semibold flex items-center gap-1">
+                    <Icon name="CheckCircle" size={16} />
+                    Подтверждено
+                  </div>
+                )}
+                {entry.status === "rejected" && (
+                  <div className="text-red-400 text-sm font-semibold flex items-center gap-1">
+                    <Icon name="XCircle" size={16} />
+                    Отклонено
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ─── ГЛАВНАЯ ─── */}
-      {section === "home" && (
+      {!isAdmin && section === "home" && (
         <>
           <section className="hero-bg text-white relative">
             <div className="max-w-6xl mx-auto px-4 py-20 md:py-32 flex flex-col md:flex-row items-center gap-12">
@@ -214,12 +454,21 @@ export default function Index() {
                   Присоединяйтесь к сообществу «Птичка» — сдавайте вторсырьё, участвуйте в рейтинге и выигрывайте призы!
                 </p>
                 <div className="flex flex-wrap gap-4">
-                  <button
-                    onClick={() => { setShowAuth(true); setAuthMode("register"); }}
-                    className="bg-yellow-400 hover:bg-yellow-300 text-green-900 font-bold px-8 py-4 rounded-xl text-lg transition-all hover:scale-105 shadow-lg hover:shadow-xl"
-                  >
-                    Начать участие 🚀
-                  </button>
+                  {isLoggedIn ? (
+                    <button
+                      onClick={() => setShowAddForm(true)}
+                      className="bg-yellow-400 hover:bg-yellow-300 text-green-900 font-bold px-8 py-4 rounded-xl text-lg transition-all hover:scale-105 shadow-lg"
+                    >
+                      ♻️ Сдать вторсырьё
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { setShowAuth(true); setAuthMode("register"); setAuthError(""); }}
+                      className="bg-yellow-400 hover:bg-yellow-300 text-green-900 font-bold px-8 py-4 rounded-xl text-lg transition-all hover:scale-105 shadow-lg"
+                    >
+                      Начать участие 🚀
+                    </button>
+                  )}
                   <button
                     onClick={() => setSection("rating")}
                     className="bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all backdrop-blur-sm"
@@ -250,10 +499,10 @@ export default function Index() {
           <section className="max-w-6xl mx-auto px-4 py-16">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { val: "2.4 т", label: "Собрано вторсырья", icon: "Scale" },
-                { val: "187", label: "Участников", icon: "Users" },
-                { val: "12", label: "Месяцев работы", icon: "Calendar" },
-                { val: "36", label: "Призов выдано", icon: "Trophy" },
+                { val: `${users.filter(u => !u.isAdmin).reduce((s, u) => s + u.totalKg, 0)} кг`, label: "Собрано вторсырья", icon: "Scale" },
+                { val: users.filter(u => !u.isAdmin).length, label: "Участников", icon: "Users" },
+                { val: entries.filter(e => e.status === "confirmed").length, label: "Сдач подтверждено", icon: "CheckCircle" },
+                { val: rawTypes.length, label: "Видов сырья", icon: "Layers" },
               ].map((s, i) => (
                 <div key={i} className="card-eco p-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-3">
@@ -275,19 +524,18 @@ export default function Index() {
               </div>
               <div className="grid md:grid-cols-3 gap-8">
                 {[
-                  { medal: "🥇", title: "Топ месяца", prize: "500 ₽", desc: "Сертификат на маркетплейс", color: "text-yellow-600", badge: "bg-yellow-100 text-yellow-700", rank: "1 место" },
-                  { medal: "🏅", title: "Топ полугодия", prize: "1 000 ₽", desc: "Сертификат на маркетплейс", color: "text-gray-600", badge: "bg-gray-100 text-gray-600", rank: "1 место" },
-                  { medal: "🏆", title: "Топ года", prize: "2 000 ₽", desc: "Сертификат на маркетплейс", color: "text-amber-700", badge: "bg-amber-100 text-amber-700", rank: "1 место" },
+                  { medal: "🥇", title: "Топ месяца", prize: "500 ₽", desc: "Сертификат на маркетплейс", color: "text-yellow-600", badge: "bg-yellow-100 text-yellow-700" },
+                  { medal: "🏅", title: "Топ полугодия", prize: "1 000 ₽", desc: "Сертификат на маркетплейс", color: "text-gray-600", badge: "bg-gray-100 text-gray-600" },
+                  { medal: "🏆", title: "Топ года", prize: "2 000 ₽", desc: "Сертификат на маркетплейс", color: "text-amber-700", badge: "bg-amber-100 text-amber-700" },
                 ].map((p, i) => (
                   <div key={i} className="card-eco p-8 text-center group">
                     <div className="text-5xl mb-4 group-hover:animate-float inline-block">{p.medal}</div>
                     <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">{p.title}</div>
                     <div className={`text-4xl font-black mb-2 ${p.color}`}>{p.prize}</div>
                     <div className="text-gray-600 mb-4">{p.desc}</div>
-                    <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold ${p.badge}`}>{p.rank}</div>
+                    <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold ${p.badge}`}>1 место</div>
                     <p className="text-xs text-gray-400 mt-4">
-                      За получением приза обращайтесь:<br />
-                      <a href="mailto:ptichka937@gmail.com" className="text-green-600 hover:underline">ptichka937@gmail.com</a>
+                      За призом: <a href="mailto:ptichka937@gmail.com" className="text-green-600 hover:underline">ptichka937@gmail.com</a>
                     </p>
                   </div>
                 ))}
@@ -302,9 +550,9 @@ export default function Index() {
             </div>
             <div className="grid md:grid-cols-3 gap-8">
               {[
-                { step: "1", icon: "UserPlus", title: "Зарегистрируйтесь", desc: "Введите номер телефона и имя — регистрация мгновенная, без СМС" },
-                { step: "2", icon: "PackagePlus", title: "Сдайте вторсырьё", desc: "Привезите вторсырьё в пункт приёма и внесите данные в личном кабинете" },
-                { step: "3", icon: "Trophy", title: "Получите приз", desc: "Займите топ-1 в рейтинге месяца, полугода или года и заберите сертификат" },
+                { step: "1", title: "Зарегистрируйтесь", desc: "Введите номер телефона и имя — регистрация мгновенная, без СМС" },
+                { step: "2", title: "Сдайте вторсырьё", desc: "Привезите вторсырьё в пункт приёма и внесите данные в личном кабинете" },
+                { step: "3", title: "Получите приз", desc: "Займите топ-1 в рейтинге месяца, полугода или года и заберите сертификат" },
               ].map((s, i) => (
                 <div key={i} className="flex gap-5">
                   <div className="w-12 h-12 rounded-2xl bg-green-600 text-white flex items-center justify-center font-black text-lg flex-shrink-0 shadow-lg">
@@ -322,7 +570,7 @@ export default function Index() {
       )}
 
       {/* ─── О ПРОЕКТЕ ─── */}
-      {section === "about" && (
+      {!isAdmin && section === "about" && (
         <div className="max-w-4xl mx-auto px-4 py-16">
           <div className="text-center mb-12">
             <div className="text-5xl mb-4">🌿</div>
@@ -342,9 +590,7 @@ export default function Index() {
               <h3 className="text-xl font-bold text-green-800 mb-3">Что мы принимаем</h3>
               <div className="flex flex-wrap gap-2">
                 {rawTypes.map((t) => (
-                  <span key={t} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm border border-green-200">
-                    {t}
-                  </span>
+                  <span key={t} className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm border border-green-200">{t}</span>
                 ))}
               </div>
             </div>
@@ -365,15 +611,12 @@ export default function Index() {
                 </div>
               ))}
             </div>
-            <p className="text-sm text-gray-400 mt-4">
-              Для получения призов: <a href="mailto:ptichka937@gmail.com" className="text-green-600 hover:underline">ptichka937@gmail.com</a>
-            </p>
           </div>
         </div>
       )}
 
       {/* ─── РЕЙТИНГ ─── */}
-      {section === "rating" && (
+      {!isAdmin && section === "rating" && (
         <div className="max-w-3xl mx-auto px-4 py-16">
           <div className="text-center mb-10">
             <h2 className="section-title text-4xl mb-3">Рейтинг участников</h2>
@@ -397,24 +640,27 @@ export default function Index() {
             ))}
           </div>
 
-          <div className={`rounded-2xl p-6 mb-6 text-center text-white shadow-lg ${ratingTab === "month" ? "bg-gradient-to-r from-green-700 to-green-500" : ratingTab === "half" ? "bg-gradient-to-r from-blue-700 to-blue-500" : "bg-gradient-to-r from-amber-700 to-amber-500"}`}>
-            <div className="text-4xl mb-1">{currentRating[0]?.avatar}</div>
-            <div className="font-black text-xl">{currentRating[0]?.name}</div>
-            <div className="text-white/80 text-sm">лидер {ratingTab === "month" ? "месяца" : ratingTab === "half" ? "полугодия" : "года"}</div>
-            <div className="text-3xl font-black mt-2">{currentRating[0]?.kg} кг</div>
-          </div>
-
-          <div>
-            {currentRating.map((item, i) => (
-              <RatingRow key={item.id} item={item} index={i} />
-            ))}
-          </div>
+          {ratingUsers.length > 0 ? (
+            <>
+              <div className={`rounded-2xl p-6 mb-6 text-center text-white shadow-lg ${ratingTab === "month" ? "bg-gradient-to-r from-green-700 to-green-500" : ratingTab === "half" ? "bg-gradient-to-r from-blue-700 to-blue-500" : "bg-gradient-to-r from-amber-700 to-amber-500"}`}>
+                <div className="text-4xl mb-1">{ratingUsers[0]?.avatar}</div>
+                <div className="font-black text-xl">{ratingUsers[0]?.name}</div>
+                <div className="text-white/80 text-sm">лидер {ratingTab === "month" ? "месяца" : ratingTab === "half" ? "полугодия" : "года"}</div>
+                <div className="text-3xl font-black mt-2">{ratingUsers[0]?.totalKg} кг</div>
+              </div>
+              {ratingUsers.map((u, i) => (
+                <RatingRow key={u.phone} item={u} index={i} />
+              ))}
+            </>
+          ) : (
+            <div className="text-center py-16 text-gray-400">
+              <div className="text-5xl mb-4">🌱</div>
+              <p>Пока нет участников. Станьте первым!</p>
+            </div>
+          )}
 
           <div className="text-center mt-8 text-sm text-gray-400">
-            🏆 Приз за 1 место:{" "}
-            <span className="font-bold text-green-700">
-              {ratingTab === "month" ? "сертификат 500 ₽" : ratingTab === "half" ? "сертификат 1 000 ₽" : "сертификат 2 000 ₽"}
-            </span>
+            🏆 Приз за 1 место: <span className="font-bold text-green-700">{ratingTab === "month" ? "сертификат 500 ₽" : ratingTab === "half" ? "сертификат 1 000 ₽" : "сертификат 2 000 ₽"}</span>
             <br />
             Для получения: <a href="mailto:ptichka937@gmail.com" className="text-green-600 hover:underline">ptichka937@gmail.com</a>
           </div>
@@ -422,7 +668,7 @@ export default function Index() {
       )}
 
       {/* ─── КОНТАКТЫ ─── */}
-      {section === "contacts" && (
+      {!isAdmin && section === "contacts" && (
         <div className="max-w-3xl mx-auto px-4 py-16">
           <div className="text-center mb-12">
             <div className="text-5xl mb-4">📬</div>
@@ -453,26 +699,6 @@ export default function Index() {
               </a>
             </div>
           </div>
-
-          <div className="card-eco p-8 mt-6">
-            <h3 className="font-bold text-green-800 text-xl mb-6">Призовые категории</h3>
-            <div className="space-y-4">
-              {[
-                { emoji: "🥇", period: "Топ месяца", prize: "Сертификат 500 ₽", update: "Обновляется 1-го числа каждого месяца" },
-                { emoji: "🏅", period: "Топ полугодия", prize: "Сертификат 1 000 ₽", update: "Январь–Июнь, Июль–Декабрь" },
-                { emoji: "🏆", period: "Топ года", prize: "Сертификат 2 000 ₽", update: "Итоги подводятся 31 декабря" },
-              ].map((p, i) => (
-                <div key={i} className="flex items-center gap-4 p-4 bg-green-50 rounded-xl">
-                  <span className="text-3xl">{p.emoji}</span>
-                  <div className="flex-1">
-                    <div className="font-semibold text-gray-800">{p.period}</div>
-                    <div className="text-xs text-gray-500">{p.update}</div>
-                  </div>
-                  <div className="font-black text-green-700 text-lg">{p.prize}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -483,12 +709,30 @@ export default function Index() {
           onClick={(e) => e.target === e.currentTarget && setShowAuth(false)}
         >
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl animate-fade-in-up relative">
+            {/* Вкладки */}
+            {authMode !== "admin" && (
+              <div className="flex gap-1 p-1 bg-green-50 rounded-xl mb-6 border border-green-100">
+                <button
+                  onClick={() => { setAuthMode("login"); setAuthError(""); }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${authMode === "login" ? "bg-white text-green-700 shadow-sm" : "text-gray-500"}`}
+                >
+                  Войти
+                </button>
+                <button
+                  onClick={() => { setAuthMode("register"); setAuthError(""); }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${authMode === "register" ? "bg-white text-green-700 shadow-sm" : "text-gray-500"}`}
+                >
+                  Регистрация
+                </button>
+              </div>
+            )}
+
             <div className="text-center mb-6">
-              <div className="text-4xl mb-2">🐦</div>
+              <div className="text-4xl mb-2">{authMode === "admin" ? "⚙️" : "🐦"}</div>
               <h3 className="text-2xl font-black text-green-800">
-                {authMode === "login" ? "Вход в аккаунт" : "Регистрация"}
+                {authMode === "admin" ? "Вход для администратора" : authMode === "login" ? "Вход в аккаунт" : "Регистрация"}
               </h3>
-              <p className="text-gray-500 text-sm mt-1">без отправки СМС</p>
+              {authMode === "admin" && <p className="text-gray-500 text-sm mt-1">Только для сотрудников пункта приёма</p>}
             </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
@@ -498,20 +742,22 @@ export default function Index() {
                   <input
                     className="input-eco w-full px-4 py-3"
                     placeholder="Иван Петров"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={fName}
+                    onChange={(e) => setFName(e.target.value)}
                     required
                   />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Номер телефона</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  {authMode === "admin" ? "Логин" : "Номер телефона"}
+                </label>
                 <input
                   className="input-eco w-full px-4 py-3"
-                  placeholder="+7 (___) ___-__-__"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  type="tel"
+                  placeholder={authMode === "admin" ? "admin" : "+7 (___) ___-__-__"}
+                  value={fPhone}
+                  onChange={(e) => setFPhone(e.target.value)}
+                  type={authMode === "admin" ? "text" : "tel"}
                   required
                 />
               </div>
@@ -519,28 +765,49 @@ export default function Index() {
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Пароль</label>
                 <input
                   className="input-eco w-full px-4 py-3"
-                  placeholder="Придумайте пароль"
+                  placeholder={authMode === "register" ? "Придумайте пароль" : "Введите пароль"}
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={fPassword}
+                  onChange={(e) => setFPassword(e.target.value)}
                   required
                 />
               </div>
+
+              {authError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+                  <Icon name="AlertCircle" size={16} className="flex-shrink-0" />
+                  {authError}
+                </div>
+              )}
+
               <button type="submit" className="btn-primary w-full py-3.5 mt-2">
-                {authMode === "login" ? "Войти" : "Зарегистрироваться"}
+                {authMode === "admin" ? "Войти как администратор" : authMode === "login" ? "Войти" : "Зарегистрироваться"}
               </button>
             </form>
 
-            <div className="text-center mt-4">
-              <button
-                onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}
-                className="text-sm text-green-600 hover:text-green-800 font-medium transition-colors"
-              >
-                {authMode === "login" ? "Нет аккаунта? Зарегистрируйтесь" : "Уже есть аккаунт? Войти"}
-              </button>
-            </div>
+            {authMode !== "admin" && (
+              <div className="text-center mt-4">
+                <button
+                  onClick={() => { setAuthMode("admin"); setAuthError(""); resetAuthForm(); }}
+                  className="text-xs text-gray-400 hover:text-amber-600 transition-colors"
+                >
+                  ⚙️ Вход для администратора
+                </button>
+              </div>
+            )}
+            {authMode === "admin" && (
+              <div className="text-center mt-4">
+                <button
+                  onClick={() => { setAuthMode("login"); setAuthError(""); resetAuthForm(); }}
+                  className="text-xs text-gray-400 hover:text-green-600 transition-colors"
+                >
+                  ← Вернуться к обычному входу
+                </button>
+              </div>
+            )}
+
             <button
-              onClick={() => setShowAuth(false)}
+              onClick={() => { setShowAuth(false); resetAuthForm(); }}
               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
             >
               <Icon name="X" size={20} />
@@ -550,7 +817,7 @@ export default function Index() {
       )}
 
       {/* ─── МОДАЛ: ДОБАВИТЬ ВТОРСЫРЬЁ ─── */}
-      {showAddForm && (
+      {showAddForm && isLoggedIn && !isAdmin && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay"
           onClick={(e) => e.target === e.currentTarget && setShowAddForm(false)}
@@ -559,17 +826,24 @@ export default function Index() {
             <div className="text-center mb-6">
               <div className="text-4xl mb-2">♻️</div>
               <h3 className="text-2xl font-black text-green-800">Сдать вторсырьё</h3>
-              <p className="text-gray-500 text-sm mt-1">Введите данные о сданном сырье</p>
+              <p className="text-gray-500 text-sm mt-1">Заявка будет подтверждена сотрудником</p>
             </div>
 
             {addSuccess ? (
               <div className="text-center py-8">
                 <div className="text-6xl mb-4">✅</div>
-                <div className="text-xl font-bold text-green-700">Данные записаны!</div>
-                <div className="text-gray-500 text-sm mt-2">Рейтинг обновится 1-го числа месяца</div>
+                <div className="text-xl font-bold text-green-700">Заявка отправлена!</div>
+                <div className="text-gray-500 text-sm mt-2">Ожидайте подтверждения от администратора</div>
               </div>
             ) : (
               <form onSubmit={handleAddRaw} className="space-y-4">
+                <div className="bg-green-50 rounded-xl p-3 flex items-center gap-3 border border-green-100 mb-2">
+                  <span className="text-xl">{currentUser?.avatar}</span>
+                  <div>
+                    <div className="text-sm font-semibold text-green-800">{currentUser?.name}</div>
+                    <div className="text-xs text-green-600">Ваш аккаунт · {currentUser?.totalKg} кг уже сдано</div>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Тип вторсырья</label>
                   <select
@@ -595,12 +869,12 @@ export default function Index() {
                     required
                   />
                 </div>
-                <div className="bg-green-50 rounded-xl p-4 flex items-start gap-3 border border-green-100">
-                  <Icon name="Info" size={18} className="text-green-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-green-700">Данные будут учтены в рейтинге после подтверждения сотрудником пункта приёма</p>
+                <div className="bg-amber-50 rounded-xl p-4 flex items-start gap-3 border border-amber-100">
+                  <Icon name="Info" size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-700">Данные будут учтены в рейтинге после подтверждения администратором</p>
                 </div>
                 <button type="submit" className="btn-primary w-full py-3.5">
-                  Подтвердить сдачу
+                  Отправить заявку
                 </button>
               </form>
             )}
@@ -615,55 +889,47 @@ export default function Index() {
       )}
 
       {/* ─── ФУТЕР ─── */}
-      <footer className="bg-green-900 text-white mt-16">
-        <div className="max-w-6xl mx-auto px-4 py-12">
-          <div className="grid md:grid-cols-3 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">🐦</span>
-                <span className="font-black text-xl">Птичка</span>
-              </div>
-              <p className="text-green-300 text-sm leading-relaxed">
-                Экологический пункт сбора вторсырья. Вместе сделаем планету чище!
-              </p>
-            </div>
-            <div>
-              <div className="font-bold text-green-300 mb-3 text-sm uppercase tracking-wider">Навигация</div>
-              <div className="space-y-2">
-                {navItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setSection(item.id)}
-                    className="block text-sm text-white/70 hover:text-white transition-colors"
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="font-bold text-green-300 mb-3 text-sm uppercase tracking-wider">Контакты</div>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <div className="text-white/50 text-xs">Поддержка</div>
-                  <a href="mailto:ptichka3829@gmail.com" className="text-white/80 hover:text-white transition-colors">
-                    ptichka3829@gmail.com
-                  </a>
+      {!isAdmin && (
+        <footer className="bg-green-900 text-white mt-16">
+          <div className="max-w-6xl mx-auto px-4 py-12">
+            <div className="grid md:grid-cols-3 gap-8 mb-8">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">🐦</span>
+                  <span className="font-black text-xl">Птичка</span>
                 </div>
-                <div>
-                  <div className="text-white/50 text-xs">Призы</div>
-                  <a href="mailto:ptichka937@gmail.com" className="text-white/80 hover:text-white transition-colors">
-                    ptichka937@gmail.com
-                  </a>
+                <p className="text-green-300 text-sm leading-relaxed">Экологический пункт сбора вторсырья. Вместе сделаем планету чище!</p>
+              </div>
+              <div>
+                <div className="font-bold text-green-300 mb-3 text-sm uppercase tracking-wider">Навигация</div>
+                <div className="space-y-2">
+                  {navItems.map((item) => (
+                    <button key={item.id} onClick={() => setSection(item.id)} className="block text-sm text-white/70 hover:text-white transition-colors">
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-green-300 mb-3 text-sm uppercase tracking-wider">Контакты</div>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <div className="text-white/50 text-xs">Поддержка</div>
+                    <a href="mailto:ptichka3829@gmail.com" className="text-white/80 hover:text-white transition-colors">ptichka3829@gmail.com</a>
+                  </div>
+                  <div>
+                    <div className="text-white/50 text-xs">Призы</div>
+                    <a href="mailto:ptichka937@gmail.com" className="text-white/80 hover:text-white transition-colors">ptichka937@gmail.com</a>
+                  </div>
                 </div>
               </div>
             </div>
+            <div className="border-t border-white/10 pt-6 text-center text-white/40 text-sm">
+              © 2024 Птичка. Рейтинг обновляется 1-го числа каждого месяца.
+            </div>
           </div>
-          <div className="border-t border-white/10 pt-6 text-center text-white/40 text-sm">
-            © 2024 Птичка. Все права защищены. Рейтинг обновляется 1-го числа каждого месяца.
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }
