@@ -8,12 +8,14 @@ const rawTypes = ["Бумага", "Пластик", "Стекло", "Метал�
 type Section = "home" | "about" | "rating" | "contacts";
 type AuthMode = "login" | "register" | "admin";
 type EntryStatus = "pending" | "confirmed" | "rejected";
+type AdminTab = "entries" | "users";
 
 interface User {
   id: number;
   name: string;
   phone: string;
   avatar: string;
+  avatarUrl?: string | null;
   totalKg: number;
   isAdmin: boolean;
 }
@@ -33,7 +35,18 @@ interface RatingUser {
   name: string;
   phone: string;
   avatar: string;
+  avatarUrl?: string | null;
   totalKg: number;
+}
+
+interface AdminUser {
+  id: number;
+  name: string;
+  phone: string;
+  avatar: string;
+  avatarUrl?: string | null;
+  totalKg: number;
+  createdAt: string;
 }
 
 async function api<T>(action: string, method = "GET", body?: object): Promise<T> {
@@ -66,13 +79,34 @@ function getRankEmoji(i: number) {
   return `${i + 1}`;
 }
 
+function AvatarView({ avatar, avatarUrl, size = 40 }: { avatar: string; avatarUrl?: string | null; size?: number }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt="avatar"
+        className="rounded-full object-cover border-2 border-green-200 flex-shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full bg-green-50 border-2 border-green-100 flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.55 }}
+    >
+      {avatar}
+    </div>
+  );
+}
+
 function RatingRow({ item, index }: { item: RatingUser; index: number }) {
   return (
     <div className={`flex items-center gap-4 p-4 rounded-xl mb-3 transition-all hover:scale-[1.01] ${index < 3 ? "card-eco" : "bg-white/60 border border-green-100"}`}>
       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${getRankClass(index)}`}>
         {getRankEmoji(index)}
       </div>
-      <div className="text-2xl">{item.avatar}</div>
+      <AvatarView avatar={item.avatar} avatarUrl={item.avatarUrl} size={44} />
       <div className="flex-1">
         <div className="font-semibold text-gray-800">{item.name}</div>
         <div className="text-sm text-gray-500">{maskPhone(item.phone)}</div>
@@ -100,6 +134,14 @@ export default function Index() {
   const [ratingUsers, setRatingUsers] = useState<RatingUser[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [loadingRating, setLoadingRating] = useState(false);
+
+  const [adminTab, setAdminTab] = useState<AdminTab>("entries");
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [avatarUploadingId, setAvatarUploadingId] = useState<number | null>(null);
+  const [profileAvatarUploading, setProfileAvatarUploading] = useState(false);
 
   const [fPhone, setFPhone] = useState("");
   const [fName, setFName] = useState("");
@@ -141,13 +183,109 @@ export default function Index() {
     }
   }, []);
 
+  /* ─── Загрузка пользователей для админа ─── */
+  const loadUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    try {
+      const data = await api<AdminUser[]>("users");
+      setAdminUsers(Array.isArray(data) ? data : []);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadRating();
   }, [loadRating]);
 
   useEffect(() => {
-    if (isAdmin) loadEntries();
-  }, [isAdmin, loadEntries]);
+    if (isAdmin) {
+      loadEntries();
+      loadUsers();
+    }
+  }, [isAdmin, loadEntries, loadUsers]);
+
+  /* ─── Преобразование файла в base64 ─── */
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ─── Загрузка аватара (текущий пользователь) ─── */
+  async function handleUploadOwnAvatar(file: File) {
+    if (!currentUser) return;
+    setProfileAvatarUploading(true);
+    try {
+      const b64 = await fileToBase64(file);
+      const result = await api<{ avatarUrl: string; error?: string }>("upload_avatar", "POST", {
+        userId: currentUser.id,
+        imageBase64: b64,
+        contentType: file.type,
+      });
+      if (result.avatarUrl) {
+        setCurrentUser({ ...currentUser, avatarUrl: result.avatarUrl });
+        loadRating();
+      }
+    } catch { /* ignore */ } finally {
+      setProfileAvatarUploading(false);
+    }
+  }
+
+  /* ─── Админ: загрузить аватар пользователю ─── */
+  async function handleAdminUploadAvatar(userId: number, file: File) {
+    setAvatarUploadingId(userId);
+    try {
+      const b64 = await fileToBase64(file);
+      const result = await api<{ avatarUrl: string; error?: string }>("upload_avatar", "POST", {
+        userId, imageBase64: b64, contentType: file.type,
+      });
+      if (result.avatarUrl) {
+        setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, avatarUrl: result.avatarUrl } : u));
+        loadRating();
+      }
+    } catch { /* ignore */ } finally {
+      setAvatarUploadingId(null);
+    }
+  }
+
+  /* ─── Админ: удалить аватар ─── */
+  async function handleRemoveAvatar(userId: number) {
+    await api("remove_avatar", "POST", { userId });
+    setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, avatarUrl: null } : u));
+    loadRating();
+  }
+
+  /* ─── Админ: сохранить имя ─── */
+  async function handleSaveName(userId: number) {
+    if (!editingName.trim()) return;
+    await api("update_user", "POST", { userId, name: editingName.trim() });
+    setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, name: editingName.trim() } : u));
+    setEditingUserId(null);
+    setEditingName("");
+    loadRating();
+    loadEntries();
+  }
+
+  /* ─── Админ: обнулить кг ─── */
+  async function handleResetUser(userId: number) {
+    if (!window.confirm("Обнулить результаты этого пользователя?")) return;
+    await api("reset_user", "POST", { userId });
+    setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, totalKg: 0 } : u));
+    loadRating();
+  }
+
+  /* ─── Админ: удалить пользователя ─── */
+  async function handleDeleteUser(userId: number) {
+    if (!window.confirm("Удалить пользователя полностью? Все его заявки тоже удалятся.")) return;
+    await api("delete_user", "POST", { userId });
+    setAdminUsers(prev => prev.filter(u => u.id !== userId));
+    loadRating();
+    loadEntries();
+  }
 
   /* ─── Авторизация ─── */
   async function handleAuth(e: React.FormEvent) {
@@ -268,7 +406,7 @@ export default function Index() {
                     Сдать вторсырьё
                   </button>
                   <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-full border border-green-200">
-                    <span className="text-lg">{currentUser.avatar}</span>
+                    <AvatarView avatar={currentUser.avatar} avatarUrl={currentUser.avatarUrl} size={24} />
                     <span className="text-green-700 text-sm font-medium">{currentUser.name}</span>
                     <button onClick={() => setCurrentUser(null)} className="text-gray-400 hover:text-red-500 transition-colors">
                       <Icon name="LogOut" size={14} />
@@ -318,82 +456,233 @@ export default function Index() {
       {/* ─── ПАНЕЛЬ АДМИНИСТРАТОРА ─── */}
       {isAdmin && (
         <div className="max-w-5xl mx-auto px-4 py-10">
-          <div className="mb-8 flex flex-col md:flex-row md:items-center gap-4">
+          <div className="mb-6 flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center text-3xl">⚙️</div>
               <div>
                 <h2 className="text-2xl font-black text-gray-800">Панель администратора</h2>
-                <p className="text-gray-500 text-sm">Управление заявками на сдачу вторсырья</p>
+                <p className="text-gray-500 text-sm">Заявки и управление участниками</p>
               </div>
             </div>
-            {pendingCount > 0 && (
-              <div className="md:ml-auto bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl font-semibold text-sm">
-                ⚠️ {pendingCount} заявок ожидают подтверждения
-              </div>
-            )}
-            <button onClick={loadEntries} className="btn-secondary px-4 py-2 text-sm flex items-center gap-2">
+            <button
+              onClick={() => { loadEntries(); loadUsers(); loadRating(); }}
+              className="md:ml-auto btn-secondary px-4 py-2 text-sm flex items-center gap-2"
+            >
               <Icon name="RefreshCw" size={15} />
               Обновить
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            {[
-              { val: entries.filter(e => e.status === "pending").length, label: "Ожидают", color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
-              { val: entries.filter(e => e.status === "confirmed").length, label: "Подтверждено", color: "text-green-600", bg: "bg-green-50 border-green-200" },
-              { val: entries.filter(e => e.status === "rejected").length, label: "Отклонено", color: "text-red-500", bg: "bg-red-50 border-red-200" },
-            ].map((s, i) => (
-              <div key={i} className={`card-eco p-5 text-center border ${s.bg}`}>
-                <div className={`text-3xl font-black ${s.color}`}>{s.val}</div>
-                <div className="text-sm text-gray-500">{s.label}</div>
-              </div>
-            ))}
+          {/* ─── Вкладки ─── */}
+          <div className="flex gap-2 p-1.5 bg-green-50 rounded-2xl mb-6 border border-green-100">
+            <button
+              onClick={() => setAdminTab("entries")}
+              className={`flex-1 py-3 px-4 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${adminTab === "entries" ? "tab-active" : "text-gray-600 hover:bg-green-100"}`}
+            >
+              <Icon name="Inbox" size={16} />
+              Заявки
+              {pendingCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
+              )}
+            </button>
+            <button
+              onClick={() => setAdminTab("users")}
+              className={`flex-1 py-3 px-4 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${adminTab === "users" ? "tab-active" : "text-gray-600 hover:bg-green-100"}`}
+            >
+              <Icon name="Users" size={16} />
+              Пользователи
+              <span className="bg-green-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{adminUsers.length}</span>
+            </button>
           </div>
 
-          {loadingEntries ? (
-            <div className="text-center py-16 text-gray-400">
-              <div className="text-4xl mb-3 animate-spin inline-block">⚙️</div>
-              <p>Загружаю заявки...</p>
-            </div>
-          ) : entries.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <div className="text-5xl mb-4">📭</div>
-              <p>Заявок пока нет</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {entries.map((entry) => (
-                <div key={entry.id} className={`card-eco p-5 flex flex-col md:flex-row md:items-center gap-4 ${entry.status === "confirmed" ? "border-green-200 bg-green-50/30" : entry.status === "rejected" ? "border-red-100 bg-red-50/20 opacity-60" : ""}`}>
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${entry.status === "confirmed" ? "bg-green-100" : entry.status === "rejected" ? "bg-red-100" : "bg-amber-100"}`}>
-                      {entry.status === "confirmed" ? "✅" : entry.status === "rejected" ? "❌" : "⏳"}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-800">{entry.userName}</div>
-                      <div className="text-xs text-gray-400">{maskPhone(entry.userPhone)} · {entry.date}</div>
-                    </div>
-                    <div className="flex items-center gap-2 ml-auto md:ml-0">
-                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">{entry.type}</span>
-                      <span className="font-black text-gray-800 text-lg">{entry.kg} кг</span>
-                    </div>
+          {/* ── ЗАЯВКИ ── */}
+          {adminTab === "entries" && (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                {[
+                  { val: entries.filter(e => e.status === "pending").length, label: "Ожидают", color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
+                  { val: entries.filter(e => e.status === "confirmed").length, label: "Подтверждено", color: "text-green-600", bg: "bg-green-50 border-green-200" },
+                  { val: entries.filter(e => e.status === "rejected").length, label: "Отклонено", color: "text-red-500", bg: "bg-red-50 border-red-200" },
+                ].map((s, i) => (
+                  <div key={i} className={`card-eco p-5 text-center border ${s.bg}`}>
+                    <div className={`text-3xl font-black ${s.color}`}>{s.val}</div>
+                    <div className="text-sm text-gray-500">{s.label}</div>
                   </div>
-                  {entry.status === "pending" && (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleConfirm(entry.id)} className="btn-primary px-5 py-2 text-sm flex items-center gap-2">
-                        <Icon name="Check" size={16} />
-                        Подтвердить
-                      </button>
-                      <button onClick={() => handleReject(entry.id)} className="px-5 py-2 text-sm rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-all font-semibold flex items-center gap-2">
-                        <Icon name="X" size={16} />
-                        Отклонить
-                      </button>
-                    </div>
-                  )}
-                  {entry.status === "confirmed" && <div className="text-green-600 text-sm font-semibold flex items-center gap-1"><Icon name="CheckCircle" size={16} />Подтверждено</div>}
-                  {entry.status === "rejected" && <div className="text-red-400 text-sm font-semibold flex items-center gap-1"><Icon name="XCircle" size={16} />Отклонено</div>}
+                ))}
+              </div>
+
+              {loadingEntries ? (
+                <div className="text-center py-16 text-gray-400">
+                  <div className="text-4xl mb-3 animate-spin inline-block">⚙️</div>
+                  <p>Загружаю заявки...</p>
                 </div>
-              ))}
-            </div>
+              ) : entries.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <div className="text-5xl mb-4">📭</div>
+                  <p>Заявок пока нет</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {entries.map((entry) => (
+                    <div key={entry.id} className={`card-eco p-5 flex flex-col md:flex-row md:items-center gap-4 ${entry.status === "confirmed" ? "border-green-200 bg-green-50/30" : entry.status === "rejected" ? "border-red-100 bg-red-50/20 opacity-60" : ""}`}>
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${entry.status === "confirmed" ? "bg-green-100" : entry.status === "rejected" ? "bg-red-100" : "bg-amber-100"}`}>
+                          {entry.status === "confirmed" ? "✅" : entry.status === "rejected" ? "❌" : "⏳"}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800">{entry.userName}</div>
+                          <div className="text-xs text-gray-400">{maskPhone(entry.userPhone)} · {entry.date}</div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-auto md:ml-0">
+                          <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">{entry.type}</span>
+                          <span className="font-black text-gray-800 text-lg">{entry.kg} кг</span>
+                        </div>
+                      </div>
+                      {entry.status === "pending" && (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleConfirm(entry.id)} className="btn-primary px-5 py-2 text-sm flex items-center gap-2">
+                            <Icon name="Check" size={16} />
+                            Подтвердить
+                          </button>
+                          <button onClick={() => handleReject(entry.id)} className="px-5 py-2 text-sm rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-all font-semibold flex items-center gap-2">
+                            <Icon name="X" size={16} />
+                            Отклонить
+                          </button>
+                        </div>
+                      )}
+                      {entry.status === "confirmed" && <div className="text-green-600 text-sm font-semibold flex items-center gap-1"><Icon name="CheckCircle" size={16} />Подтверждено</div>}
+                      {entry.status === "rejected" && <div className="text-red-400 text-sm font-semibold flex items-center gap-1"><Icon name="XCircle" size={16} />Отклонено</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── ПОЛЬЗОВАТЕЛИ ── */}
+          {adminTab === "users" && (
+            <>
+              {loadingUsers ? (
+                <div className="text-center py-16 text-gray-400">
+                  <div className="text-4xl mb-3 animate-spin inline-block">⚙️</div>
+                  <p>Загружаю пользователей...</p>
+                </div>
+              ) : adminUsers.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <div className="text-5xl mb-4">👥</div>
+                  <p>Пользователей ещё нет</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {adminUsers.map((u) => (
+                    <div key={u.id} className="card-eco p-5 flex flex-col md:flex-row md:items-center gap-4">
+                      {/* Аватарка с возможностью загрузки */}
+                      <div className="relative group flex-shrink-0">
+                        <AvatarView avatar={u.avatar} avatarUrl={u.avatarUrl} size={56} />
+                        <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                          {avatarUploadingId === u.id ? (
+                            <Icon name="Loader2" size={20} className="text-white animate-spin" />
+                          ) : (
+                            <Icon name="Camera" size={20} className="text-white" />
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleAdminUploadAvatar(u.id, f);
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      {/* Имя и телефон */}
+                      <div className="flex-1 min-w-0">
+                        {editingUserId === u.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              className="input-eco px-3 py-1.5 text-sm flex-1"
+                              placeholder="Имя"
+                              autoFocus
+                            />
+                            <button onClick={() => handleSaveName(u.id)} className="text-green-600 hover:text-green-800 p-1">
+                              <Icon name="Check" size={18} />
+                            </button>
+                            <button onClick={() => { setEditingUserId(null); setEditingName(""); }} className="text-gray-400 hover:text-gray-600 p-1">
+                              <Icon name="X" size={18} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-gray-800 truncate">{u.name}</div>
+                            <button
+                              onClick={() => { setEditingUserId(u.id); setEditingName(u.name); }}
+                              className="text-gray-400 hover:text-green-600 transition-colors"
+                              title="Изменить имя"
+                            >
+                              <Icon name="Pencil" size={14} />
+                            </button>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-0.5">{u.phone} · рег. {u.createdAt}</div>
+                      </div>
+
+                      {/* Кг */}
+                      <div className="text-right md:min-w-[100px]">
+                        <div className="font-black text-green-700 text-xl">{u.totalKg} кг</div>
+                        <div className="text-xs text-gray-400">подтверждено</div>
+                      </div>
+
+                      {/* Действия */}
+                      <div className="flex flex-wrap gap-2 md:flex-shrink-0">
+                        {u.avatarUrl && (
+                          <button
+                            onClick={() => handleRemoveAvatar(u.id)}
+                            className="px-3 py-2 text-xs rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 font-semibold flex items-center gap-1.5"
+                            title="Удалить аватар"
+                          >
+                            <Icon name="ImageOff" size={14} />
+                            Убрать фото
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleResetUser(u.id)}
+                          className="px-3 py-2 text-xs rounded-xl border border-amber-200 text-amber-600 hover:bg-amber-50 font-semibold flex items-center gap-1.5"
+                          title="Обнулить кг"
+                        >
+                          <Icon name="RotateCcw" size={14} />
+                          Обнулить
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="px-3 py-2 text-xs rounded-xl border border-red-200 text-red-500 hover:bg-red-50 font-semibold flex items-center gap-1.5"
+                          title="Удалить пользователя"
+                        >
+                          <Icon name="Trash2" size={14} />
+                          Удалить
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 flex items-start gap-3">
+                <Icon name="Info" size={18} className="flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold mb-1">Как управлять:</div>
+                  <ul className="list-disc pl-4 space-y-1 text-xs">
+                    <li>Наведите курсор на аватар и нажмите камеру — загрузите фото (JPG, PNG)</li>
+                    <li>Иконка карандаша — изменить имя участника</li>
+                    <li>«Обнулить» — сбросить кг в 0</li>
+                    <li>«Удалить» — полностью удалить участника и его заявки</li>
+                  </ul>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -714,10 +1003,29 @@ export default function Index() {
             ) : (
               <form onSubmit={handleAddRaw} className="space-y-4">
                 <div className="bg-green-50 rounded-xl p-3 flex items-center gap-3 border border-green-100 mb-2">
-                  <span className="text-xl">{currentUser.avatar}</span>
-                  <div>
+                  <div className="relative group flex-shrink-0">
+                    <AvatarView avatar={currentUser.avatar} avatarUrl={currentUser.avatarUrl} size={40} />
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                      {profileAvatarUploading ? (
+                        <Icon name="Loader2" size={14} className="text-white animate-spin" />
+                      ) : (
+                        <Icon name="Camera" size={14} className="text-white" />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleUploadOwnAvatar(f);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="flex-1">
                     <div className="text-sm font-semibold text-green-800">{currentUser.name}</div>
                     <div className="text-xs text-green-600">{currentUser.totalKg} кг уже подтверждено</div>
+                    <div className="text-[10px] text-green-500 mt-0.5">Наведите на фото, чтобы изменить</div>
                   </div>
                 </div>
                 <div>

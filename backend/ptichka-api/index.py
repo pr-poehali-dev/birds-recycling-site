@@ -1,7 +1,10 @@
 import json
 import os
 import random
+import base64
+import uuid
 import psycopg2
+import boto3
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -14,6 +17,15 @@ AVATARS = ["🌿", "🍃", "🌱", "🌲", "🌾", "🪴", "🍀", "🌻", "🦋
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def get_s3():
+    return boto3.client(
+        "s3",
+        endpoint_url="https://bucket.poehali.dev",
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
 
 
 def ok(data):
@@ -56,13 +68,13 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return err("Пользователь с таким номером уже зарегистрирован")
         cur.execute(
-            "INSERT INTO ptichka_users (name, phone, password, avatar) VALUES (%s,%s,%s,%s) RETURNING id,name,phone,avatar,total_kg,is_admin",
+            "INSERT INTO ptichka_users (name, phone, password, avatar) VALUES (%s,%s,%s,%s) RETURNING id,name,phone,avatar,total_kg,is_admin,avatar_url",
             (name, phone, password, avatar),
         )
         r = cur.fetchone()
         conn.commit()
         conn.close()
-        return ok({"id": r[0], "name": r[1], "phone": r[2], "avatar": r[3], "totalKg": float(r[4]), "isAdmin": r[5]})
+        return ok({"id": r[0], "name": r[1], "phone": r[2], "avatar": r[3], "totalKg": float(r[4]), "isAdmin": r[5], "avatarUrl": r[6]})
 
     # ── login ─────────────────────────────────────────────────
     if action == "login" and method == "POST":
@@ -73,14 +85,14 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            "SELECT id,name,phone,avatar,total_kg,is_admin FROM ptichka_users WHERE phone=%s AND password=%s",
+            "SELECT id,name,phone,avatar,total_kg,is_admin,avatar_url FROM ptichka_users WHERE phone=%s AND password=%s",
             (phone, password),
         )
         r = cur.fetchone()
         conn.close()
         if not r:
             return err("Неверный номер телефона или пароль")
-        return ok({"id": r[0], "name": r[1], "phone": r[2], "avatar": r[3], "totalKg": float(r[4]), "isAdmin": r[5]})
+        return ok({"id": r[0], "name": r[1], "phone": r[2], "avatar": r[3], "totalKg": float(r[4]), "isAdmin": r[5], "avatarUrl": r[6]})
 
     # ── add entry ─────────────────────────────────────────────
     if action == "add_entry" and method == "POST":
@@ -161,13 +173,110 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            "SELECT name,phone,avatar,total_kg FROM ptichka_users WHERE is_admin=FALSE AND total_kg>0 ORDER BY total_kg DESC"
+            "SELECT name,phone,avatar,total_kg,avatar_url FROM ptichka_users WHERE is_admin=FALSE AND total_kg>0 ORDER BY total_kg DESC"
         )
         rows = cur.fetchall()
         conn.close()
-        return ok([{"name": r[0], "phone": r[1], "avatar": r[2], "totalKg": float(r[3])} for r in rows])
+        return ok([{"name": r[0], "phone": r[1], "avatar": r[2], "totalKg": float(r[3]), "avatarUrl": r[4]} for r in rows])
 
-    # ── healthcheck ───────────────────────────────────────────
+    # ── список пользователей (admin) ──────────────────────────
+    if action == "users" and method == "GET":
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id,name,phone,avatar,total_kg,is_admin,avatar_url,created_at FROM ptichka_users WHERE is_admin=FALSE ORDER BY total_kg DESC, id DESC"
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return ok([
+            {"id": r[0], "name": r[1], "phone": r[2], "avatar": r[3],
+             "totalKg": float(r[4]), "isAdmin": r[5], "avatarUrl": r[6],
+             "createdAt": r[7].strftime("%d.%m.%Y")}
+            for r in rows
+        ])
+
+    # ── обновить имя пользователя (admin) ─────────────────────
+    if action == "update_user" and method == "POST":
+        user_id = body.get("userId")
+        new_name = (body.get("name") or "").strip()
+        if not user_id or not new_name:
+            return err("userId и name обязательны")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE ptichka_users SET name=%s WHERE id=%s AND is_admin=FALSE", (new_name, user_id))
+        cur.execute("UPDATE ptichka_entries SET user_name=%s WHERE user_id=%s", (new_name, user_id))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
+
+    # ── обнулить кг пользователя (admin) ──────────────────────
+    if action == "reset_user" and method == "POST":
+        user_id = body.get("userId")
+        if not user_id:
+            return err("userId обязателен")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE ptichka_users SET total_kg=0 WHERE id=%s AND is_admin=FALSE", (user_id,))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
+
+    # ── удалить пользователя (admin) ──────────────────────────
+    if action == "delete_user" and method == "POST":
+        user_id = body.get("userId")
+        if not user_id:
+            return err("userId обязателен")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM ptichka_entries WHERE user_id=%s", (user_id,))
+        cur.execute("DELETE FROM ptichka_users WHERE id=%s AND is_admin=FALSE", (user_id,))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
+
+    # ── загрузить аватар (base64) ─────────────────────────────
+    if action == "upload_avatar" and method == "POST":
+        user_id = body.get("userId")
+        image_b64 = body.get("imageBase64")
+        content_type = body.get("contentType") or "image/png"
+        if not user_id or not image_b64:
+            return err("userId и imageBase64 обязательны")
+        try:
+            if "," in image_b64:
+                image_b64 = image_b64.split(",", 1)[1]
+            data = base64.b64decode(image_b64)
+        except Exception:
+            return err("Некорректное изображение")
+        ext = "png"
+        if "jpeg" in content_type or "jpg" in content_type:
+            ext = "jpg"
+        elif "webp" in content_type:
+            ext = "webp"
+        elif "gif" in content_type:
+            ext = "gif"
+        key = f"avatars/{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        s3 = get_s3()
+        s3.put_object(Bucket="files", Key=key, Body=data, ContentType=content_type)
+        url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE ptichka_users SET avatar_url=%s WHERE id=%s", (url, user_id))
+        conn.commit()
+        conn.close()
+        return ok({"avatarUrl": url})
+
+    # ── удалить аватар пользователя (admin) ───────────────────
+    if action == "remove_avatar" and method == "POST":
+        user_id = body.get("userId")
+        if not user_id:
+            return err("userId обязателен")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE ptichka_users SET avatar_url=NULL WHERE id=%s", (user_id,))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
+
     if method == "GET" and not action:
         return ok({"status": "ok"})
 
