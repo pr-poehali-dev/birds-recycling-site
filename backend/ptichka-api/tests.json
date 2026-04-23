@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "Get rating",
+      "method": "GET",
+      "path": "/?action=rating",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get entries",
+      "method": "GET",
+      "path": "/?action=entries",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
