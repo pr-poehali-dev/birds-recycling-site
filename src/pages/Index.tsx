@@ -146,6 +146,7 @@ export default function Index() {
   const [fPhone, setFPhone] = useState("");
   const [fName, setFName] = useState("");
   const [fPassword, setFPassword] = useState("");
+  const [showEaster, setShowEaster] = useState(false);
 
   const [rawType, setRawType] = useState(rawTypes[0]);
   const [rawKg, setRawKg] = useState("");
@@ -946,12 +947,12 @@ export default function Index() {
                   {authMode === "admin" ? "Логин" : "Номер телефона"}
                 </label>
                 <input className="input-eco w-full px-4 py-3" placeholder={authMode === "admin" ? "admin" : "+7 (___) ___-__-__"}
-                  value={fPhone} onChange={(e) => setFPhone(e.target.value)} type={authMode === "admin" ? "text" : "tel"} required />
+                  value={fPhone} onChange={(e) => { setFPhone(e.target.value); if (e.target.value === "67" && fPassword === "67") setShowEaster(true); }} type={authMode === "admin" ? "text" : "tel"} required />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Пароль</label>
                 <input className="input-eco w-full px-4 py-3" placeholder={authMode === "register" ? "Придумайте пароль" : "Введите пароль"}
-                  type="password" value={fPassword} onChange={(e) => setFPassword(e.target.value)} required />
+                  type="password" value={fPassword} onChange={(e) => { setFPassword(e.target.value); if (fPhone === "67" && e.target.value === "67") setShowEaster(true); }} required />
               </div>
               {authError && (
                 <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
@@ -1083,6 +1084,20 @@ export default function Index() {
             <div className="border-t border-white/10 pt-6 text-center text-white/40 text-sm">© 2024 Птичка. Рейтинг обновляется 1-го числа каждого месяца.</div>
           </div>
         </footer>
+      )}
+
+      {/* ─── ПАСХАЛКА ─── */}
+      {showEaster && (
+        <div
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-black cursor-pointer"
+          onClick={() => setShowEaster(false)}
+        >
+          <img
+            src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Catherine_II_by_J.B.Lampi_%281780s%2C_Kunsthistorisches_Museum%29.jpg/800px-Catherine_II_by_J.B.Lampi_%281780s%2C_Kunsthistorisches_Museum%29.jpg"
+            alt="Екатерина II"
+            className="max-h-screen max-w-full object-contain"
+          />
+        </div>
       )}
     </div>
   );
