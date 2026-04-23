@@ -1093,7 +1093,7 @@ export default function Index() {
           onClick={() => setShowEaster(false)}
         >
           <img
-            src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Catherine_II_by_J.B.Lampi_%281780s%2C_Kunsthistorisches_Museum%29.jpg/800px-Catherine_II_by_J.B.Lampi_%281780s%2C_Kunsthistorisches_Museum%29.jpg"
+            src="https://cdn.poehali.dev/projects/db5b1cd7-e249-488f-a318-9c52676d7b5d/bucket/64934191-694b-4aae-b156-592e85b08934.png"
             alt="Екатерина II"
             className="max-h-screen max-w-full object-contain"
           />
