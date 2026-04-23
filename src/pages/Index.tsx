@@ -236,9 +236,7 @@ export default function Index() {
       <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-green-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <button onClick={() => setSection("home")} className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-700 to-green-500 flex items-center justify-center text-white text-lg shadow-md group-hover:scale-110 transition-transform">
-              🐦
-            </div>
+            <div className="w-9 h-9 from-green-700 to-green-500 flex items-center justify-center text-white text-lg shadow-md group-hover:scale-110 transition-transform mx-0 bg-cyan-600 rounded-3xl"></div>
             <span className="font-black text-xl text-green-800" style={{ fontFamily: "'Golos Text', sans-serif" }}>Птичка</span>
           </button>
 
